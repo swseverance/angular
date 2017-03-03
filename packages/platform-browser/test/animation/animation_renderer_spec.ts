@@ -37,13 +37,6 @@ export function main() {
           .createRenderer(element, type);
     }
 
-    it('should register the provided triggers with the view engine when created', () => {
-      const renderer = makeRenderer([trigger('trig1', []), trigger('trig2', [])]);
-
-      const engine = TestBed.get(ɵAnimationEngine) as MockAnimationEngine;
-      expect(engine.triggers.map(t => t.name)).toEqual(['trig1', 'trig2']);
-    });
-
     it('should hook into the engine\'s insert operations when appending children', () => {
       const renderer = makeRenderer();
       const engine = TestBed.get(ɵAnimationEngine) as MockAnimationEngine;
@@ -82,7 +75,7 @@ export function main() {
       expect(engine.captures['setProperty']).toBeFalsy();
 
       renderer.setProperty(element, '@prop', 'value');
-      expect(engine.captures['setProperty'].pop()).toEqual([element, 'id#prop', 'value']);
+      expect(engine.captures['setProperty'].pop()).toEqual([element, 'prop', 'value']);
     });
 
     describe('listen', () => {
@@ -96,7 +89,7 @@ export function main() {
         expect(engine.captures['listen']).toBeFalsy();
 
         renderer.listen(element, '@event.phase', cb);
-        expect(engine.captures['listen'].pop()).toEqual([element, 'id#event', 'phase']);
+        expect(engine.captures['listen'].pop()).toEqual([element, 'event', 'phase']);
       });
 
       it('should resolve the body|document|window nodes given their values as strings as input',
@@ -115,6 +108,10 @@ export function main() {
            renderer.listen('window', '@event', cb);
            expect(engine.captures['listen'].pop()[0]).toBe(window);
          });
+    });
+
+    describe('registering animations', () => {
+      it('should only create a trigger definition once even if the registered multiple times');
     });
 
     describe('flushing animations', () => {
@@ -239,7 +236,7 @@ export function main() {
            assertHasParent(elm2);
            assertHasParent(elm3);
            engine.flush();
-           finishPlayers(engine.activePlayers);
+           finishPlayers(engine.players);
 
            cmp.exp1 = false;
            fixture.detectChanges();
@@ -247,7 +244,7 @@ export function main() {
            assertHasParent(elm2);
            assertHasParent(elm3);
            engine.flush();
-           expect(engine.activePlayers.length).toEqual(0);
+           expect(engine.players.length).toEqual(0);
 
            cmp.exp2 = false;
            fixture.detectChanges();
@@ -255,7 +252,7 @@ export function main() {
            assertHasParent(elm2, false);
            assertHasParent(elm3);
            engine.flush();
-           expect(engine.activePlayers.length).toEqual(0);
+           expect(engine.players.length).toEqual(0);
 
            cmp.exp3 = false;
            fixture.detectChanges();
@@ -263,7 +260,7 @@ export function main() {
            assertHasParent(elm2, false);
            assertHasParent(elm3);
            engine.flush();
-           expect(engine.activePlayers.length).toEqual(1);
+           expect(engine.players.length).toEqual(1);
          });
     });
   });
@@ -279,24 +276,31 @@ class MockAnimationEngine extends ɵAnimationEngine {
     data.push(args);
   }
 
-  registerTrigger(trigger: AnimationTriggerMetadata) { this.triggers.push(trigger); }
+  registerTrigger(componentId: string, namespaceId: string, trigger: AnimationTriggerMetadata) {
+    this.triggers.push(trigger);
+  }
 
-  onInsert(element: any, domFn: () => any): void { this._capture('onInsert', [element]); }
+  onInsert(namespaceId: string, element: any): void { this._capture('onInsert', [element]); }
 
-  onRemove(element: any, domFn: () => any): void { this._capture('onRemove', [element]); }
+  onRemove(namespaceId: string, element: any, domFn: () => any): void {
+    this._capture('onRemove', [element]);
+  }
 
-  setProperty(element: any, property: string, value: any): void {
+  setProperty(namespaceId: string, element: any, property: string, value: any): void {
     this._capture('setProperty', [element, property, value]);
   }
 
-  listen(element: any, eventName: string, eventPhase: string, callback: (event: any) => any):
-      () => void {
+  listen(
+      namespaceId: string, element: any, eventName: string, eventPhase: string,
+      callback: (event: any) => any): () => void {
     // we don't capture the callback here since the renderer wraps it in a zone
     this._capture('listen', [element, eventName, eventPhase]);
     return () => {};
   }
 
   flush() {}
+
+  destroy(namespaceId: string) {}
 }
 
 

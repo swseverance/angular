@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig-build",
+
+  "compilerOptions": {
+    "paths": {
+      "@angular/core": ["../../dist/packages/core"],
+      "@angular/core/testing": ["../../dist/packages/core/testing"],
+      "@angular/animations": ["../../dist/packages/animations"],
+      "@angular/animations/browser": ["../../dist/packages/animations/browser"],
+      "@angular/animations/browser/testing": ["../../dist/packages/animations/browser/testing"],
+      "@angular/platform-browser": ["../../dist/packages/platform-browser"],
+      "@angular/platform-browser/testing": ["../../dist/packages/platform-browser/testing"],
+      "@angular/platform-browser/animations": ["../../dist/packages/platform-browser/animations"]
+    }
+  },
+  "files": [
+    "public_api.ts",
+    "../../../../node_modules/zone.js/dist/zone.js.d.ts",
+    "../../../system.d.ts"
+  ],
+  "angularCompilerOptions": {
+    "annotateForClosureCompiler": true,
+    "strictMetadataEmit": true,
+    "flatModuleOutFile": "index.js",
+    "flatModuleId": "@angular/platform-browser/animations/testing"
+  }
+}

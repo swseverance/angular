@@ -105,6 +105,13 @@ export class ComponentFixture<T> {
     }
   }
 
+  /** @internal
+   *
+   */
+  _flushAnimationsFn = () => {};
+
+  private _flushAnimations() { this._flushAnimationsFn(); }
+
   /**
    * Trigger a change detection cycle for the component.
    */
@@ -112,10 +119,14 @@ export class ComponentFixture<T> {
     if (this.ngZone != null) {
       // Run the change detection inside the NgZone so that any async tasks as part of the change
       // detection are captured by the zone and can be waited for in isStable.
-      this.ngZone.run(() => { this._tick(checkNoChanges); });
+      this.ngZone.run(() => {
+        this._tick(checkNoChanges);
+        this._flushAnimations();
+      });
     } else {
       // Running without zone. Just do the change detection.
       this._tick(checkNoChanges);
+      this._flushAnimations();
     }
   }
 

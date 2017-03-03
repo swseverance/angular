@@ -32,6 +32,9 @@ export declare function discardPeriodicTasks(): void;
 export declare function fakeAsync(fn: Function): (...args: any[]) => any;
 
 /** @experimental */
+export declare const FLUSH_ANIMATIONS_FN: InjectionToken<{}>;
+
+/** @experimental */
 export declare function flushMicrotasks(): void;
 
 /** @experimental */

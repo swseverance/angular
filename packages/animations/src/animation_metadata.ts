@@ -20,13 +20,19 @@ export declare type AnimateTimings = {
  * @experimental Animation support is experimental.
  */
 export const enum AnimationMetadataType {
-  State,
-  Transition,
-  Sequence,
-  Group,
-  Animate,
-  KeyframeSequence,
-  Style
+  State = 0,
+  Transition = 1,
+  Sequence = 2,
+  Group = 3,
+  Animate = 4,
+  Keyframes = 5,
+  Style = 6,
+  Trigger = 7,
+  Reference = 8,
+  AnimateChild = 9,
+  AnimateRef = 10,
+  Query = 11,
+  Stagger = 12
 }
 
 /**
@@ -42,7 +48,7 @@ export interface AnimationMetadata { type: AnimationMetadataType; }
 /**
  * @experimental Animation support is experimental.
  */
-export interface AnimationTriggerMetadata {
+export interface AnimationTriggerMetadata extends AnimationMetadata {
   name: string;
   definitions: AnimationMetadata[];
 }
@@ -67,6 +73,25 @@ export interface AnimationStateMetadata extends AnimationMetadata {
 export interface AnimationTransitionMetadata extends AnimationMetadata {
   expr: string|((fromState: string, toState: string) => boolean);
   animation: AnimationMetadata|AnimationMetadata[];
+  locals: {[name: string]: any}|null;
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export interface AnimationReferenceMetadata extends AnimationMetadata {
+  animation: AnimationMetadata|AnimationMetadata[];
+  locals: {[name: string]: any}|null;
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export interface AnimationQueryMetadata extends AnimationMetadata {
+  selector: string;
+  multi: boolean;
+  animation: AnimationMetadata|AnimationMetadata[];
+  locals: {[name: string]: any}|null;
 }
 
 /**
@@ -86,8 +111,8 @@ export interface AnimationKeyframesSequenceMetadata extends AnimationMetadata {
  * @experimental Animation support is experimental.
  */
 export interface AnimationStyleMetadata extends AnimationMetadata {
-  styles: {[key: string]: string | number}|{[key: string]: string | number}[];
-  offset?: number;
+  styles: '*'|{[key: string]: string | number}|Array<{[key: string]: string | number}|'*'>;
+  offset: number|null;
 }
 
 /**
@@ -102,12 +127,30 @@ export interface AnimationAnimateMetadata extends AnimationMetadata {
 }
 
 /**
+ * @experimental Animation support is experimental.
+ */
+export interface AnimationAnimateChildMetadata extends AnimationMetadata {
+  locals: {[name: string]: any}|null;
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export interface AnimationAnimateRefMetadata extends AnimationMetadata {
+  animation: AnimationReferenceMetadata;
+  locals: {[name: string]: any}|null;
+}
+
+/**
  * Metadata representing the entry of animations. Instances of this class are provided via the
  * animation DSL when the {@link sequence sequence animation function} is called.
  *
  * @experimental Animation support is experimental.
  */
-export interface AnimationSequenceMetadata extends AnimationMetadata { steps: AnimationMetadata[]; }
+export interface AnimationSequenceMetadata extends AnimationMetadata {
+  steps: AnimationMetadata[];
+  locals: {[name: string]: any}|null;
+}
 
 /**
  * Metadata representing the entry of animations. Instances of this class are provided via the
@@ -115,7 +158,18 @@ export interface AnimationSequenceMetadata extends AnimationMetadata { steps: An
  *
  * @experimental Animation support is experimental.
  */
-export interface AnimationGroupMetadata extends AnimationMetadata { steps: AnimationMetadata[]; }
+export interface AnimationGroupMetadata extends AnimationMetadata {
+  steps: AnimationMetadata[];
+  locals: {[name: string]: any}|null;
+}
+
+/**
+* @experimental Animation support is experimental.
+*/
+export interface AnimationStaggerMetadata extends AnimationMetadata {
+  timings: string|number;
+  animation: AnimationMetadata|AnimationMetadata[];
+}
 
 /**
  * `trigger` is an animation-specific function that is designed to be used inside of Angular's
@@ -169,7 +223,7 @@ export interface AnimationGroupMetadata extends AnimationMetadata { steps: Anima
  * @experimental Animation support is experimental.
  */
 export function trigger(name: string, definitions: AnimationMetadata[]): AnimationTriggerMetadata {
-  return {name, definitions};
+  return {type: AnimationMetadataType.Trigger, name, definitions};
 }
 
 /**
@@ -220,7 +274,7 @@ export function trigger(name: string, definitions: AnimationMetadata[]): Animati
 export function animate(
     timings: string | number, styles: AnimationStyleMetadata | AnimationKeyframesSequenceMetadata |
         null = null): AnimationAnimateMetadata {
-  return {type: AnimationMetadataType.Animate, styles: styles, timings: timings};
+  return {type: AnimationMetadataType.Animate, styles, timings};
 }
 
 /**
@@ -254,8 +308,9 @@ export function animate(
  *
  * @experimental Animation support is experimental.
  */
-export function group(steps: AnimationMetadata[]): AnimationGroupMetadata {
-  return {type: AnimationMetadataType.Group, steps: steps};
+export function group(steps: AnimationMetadata[], locals: {[name: string]: any} | null = null):
+    AnimationGroupMetadata {
+  return {type: AnimationMetadataType.Group, steps, locals};
 }
 
 /**
@@ -292,8 +347,9 @@ export function group(steps: AnimationMetadata[]): AnimationGroupMetadata {
  *
  * @experimental Animation support is experimental.
  */
-export function sequence(steps: AnimationMetadata[]): AnimationSequenceMetadata {
-  return {type: AnimationMetadataType.Sequence, steps: steps};
+export function sequence(steps: AnimationMetadata[], locals: {[name: string]: any} | null = null):
+    AnimationSequenceMetadata {
+  return {type: AnimationMetadataType.Sequence, steps, locals};
 }
 
 /**
@@ -339,9 +395,9 @@ export function sequence(steps: AnimationMetadata[]): AnimationSequenceMetadata 
  * @experimental Animation support is experimental.
  */
 export function style(
-    tokens: {[key: string]: string | number} |
-    Array<{[key: string]: string | number}>): AnimationStyleMetadata {
-  return {type: AnimationMetadataType.Style, styles: tokens};
+    tokens: '*' | {[key: string]: string | number} |
+    Array<'*'|{[key: string]: string | number}>): AnimationStyleMetadata {
+  return {type: AnimationMetadataType.Style, styles: tokens, offset: null};
 }
 
 /**
@@ -393,7 +449,7 @@ export function style(
  * @experimental Animation support is experimental.
  */
 export function state(name: string, styles: AnimationStyleMetadata): AnimationStateMetadata {
-  return {type: AnimationMetadataType.State, name: name, styles: styles};
+  return {type: AnimationMetadataType.State, name, styles};
 }
 
 /**
@@ -442,7 +498,7 @@ export function state(name: string, styles: AnimationStyleMetadata): AnimationSt
  * @experimental Animation support is experimental.
  */
 export function keyframes(steps: AnimationStyleMetadata[]): AnimationKeyframesSequenceMetadata {
-  return {type: AnimationMetadataType.KeyframeSequence, steps: steps};
+  return {type: AnimationMetadataType.Keyframes, steps};
 }
 
 /**
@@ -554,6 +610,60 @@ export function keyframes(steps: AnimationStyleMetadata[]): AnimationKeyframesSe
  */
 export function transition(
     stateChangeExpr: string | ((fromState: string, toState: string) => boolean),
-    steps: AnimationMetadata | AnimationMetadata[]): AnimationTransitionMetadata {
-  return {type: AnimationMetadataType.Transition, expr: stateChangeExpr, animation: steps};
+    steps: AnimationMetadata | AnimationMetadata[],
+    locals: {[varName: string]: string | number} | null = null): AnimationTransitionMetadata {
+  return {type: AnimationMetadataType.Transition, expr: stateChangeExpr, animation: steps, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function animation(
+    steps: AnimationMetadata | AnimationMetadata[],
+    locals: {[name: string]: any} | null = null): AnimationReferenceMetadata {
+  return {type: AnimationMetadataType.Reference, animation: steps, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function animateChild(locals: {[name: string]: any} | null = null):
+    AnimationAnimateChildMetadata {
+  return {type: AnimationMetadataType.AnimateChild, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function useAnimation(
+    animation: AnimationReferenceMetadata,
+    locals: {[name: string]: any} | null = null): AnimationAnimateRefMetadata {
+  return {type: AnimationMetadataType.AnimateRef, animation, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function query(
+    selector: string, animation: AnimationMetadata | AnimationMetadata[],
+    locals: {[name: string]: any} | null = null): AnimationQueryMetadata {
+  return {type: AnimationMetadataType.Query, multi: false, selector, animation, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function queryAll(
+    selector: string, animation: AnimationMetadata | AnimationMetadata[],
+    locals: {[name: string]: any} | null = null): AnimationQueryMetadata {
+  return {type: AnimationMetadataType.Query, multi: true, selector, animation, locals};
+}
+
+/**
+ * @experimental Animation support is experimental.
+ */
+export function stagger(
+    timings: string | number,
+    animation: AnimationMetadata | AnimationMetadata[]): AnimationStaggerMetadata {
+  return {type: AnimationMetadataType.Stagger, timings, animation};
 }

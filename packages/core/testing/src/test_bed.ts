@@ -7,6 +7,8 @@
  */
 
 import {CompilerOptions, Component, Directive, InjectionToken, Injector, ModuleWithComponentFactories, NgModule, NgModuleRef, NgZone, Pipe, PlatformRef, Provider, ReflectiveInjector, SchemaMetadata, Type, ɵERROR_COMPONENT_TYPE, ɵstringify as stringify} from '@angular/core';
+
+import {FLUSH_ANIMATIONS_FN} from './animations';
 import {AsyncTestCompleter} from './async_test_completer';
 import {ComponentFixture} from './component_fixture';
 import {MetadataOverride} from './metadata_override';
@@ -374,7 +376,13 @@ export class TestBed implements Injector {
     const initComponent = () => {
       const componentRef =
           componentFactory.create(Injector.NULL, [], `#${rootElId}`, this._moduleRef);
-      return new ComponentFixture<T>(componentRef, ngZone, autoDetect);
+      const cmp = new ComponentFixture<T>(componentRef, ngZone, autoDetect);
+      const FLUSH_ANIMATIONS = this.get(FLUSH_ANIMATIONS_FN, null);
+      if (FLUSH_ANIMATIONS) {
+        cmp._flushAnimationsFn = FLUSH_ANIMATIONS;
+      }
+
+      return cmp;
     };
 
     const fixture = !ngZone ? initComponent() : ngZone.run(initComponent);

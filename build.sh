@@ -258,6 +258,29 @@ minify() {
 #   None
 #######################################
 compilePackage() {
+  compileTsc ${1} ${2} ${3};
+  compilePackageRecur ${1} ${2} ${3};
+}
+
+compilePackageRecur() {
+  for DIR in ${1}/* ; do
+    [ -d "${DIR}" ] || continue
+    BASE_DIR=$(basename "${DIR}")
+    # Skip over directories that are not nested entry points
+    [[ -e ${DIR}/tsconfig-build.json && "${BASE_DIR}" != "integrationtest" ]] || continue
+    compileTsc ${DIR} ${2}/${BASE_DIR} ${3}
+  done
+
+  for DIR in ${1}/* ; do
+    [ -d "${DIR}" ] || continue
+    BASE_DIR=$(basename "${DIR}")
+    # Skip over directories that are not nested entry points
+    [[ -e ${DIR}/tsconfig-build.json && "${BASE_DIR}" != "integrationtest" ]] || continue
+    compilePackageRecur ${DIR} ${2}/${BASE_DIR} ${3}
+  done
+}
+
+compileTsc() {
   echo "======      [${3}]: COMPILING: ${NGC} -p ${1}/tsconfig-build.json"
   # For NODE_PACKAGES items (not getting rolled up)
   if containsElement "${PACKAGE}" "${NODE_PACKAGES[@]}"; then
@@ -269,15 +292,8 @@ compilePackage() {
     echo "$(cat ${LICENSE_BANNER}) ${N} export * from './${package_name}/index'" > ${2}/../${package_name}.d.ts
     echo "{\"__symbolic\":\"module\",\"version\":3,\"metadata\":{},\"exports\":[{\"from\":\"./${package_name}/index\"}]}" > ${2}/../${package_name}.metadata.json
   fi
-
-  for DIR in ${1}/* ; do
-    [ -d "${DIR}" ] || continue
-    BASE_DIR=$(basename "${DIR}")
-    # Skip over directories that are not nested entry points
-    [[ -e ${DIR}/tsconfig-build.json && "${BASE_DIR}" != "integrationtest" ]] || continue
-    compilePackage ${DIR} ${2}/${BASE_DIR} ${3} true
-  done
 }
+
 
 #######################################
 # Moves typings and metadata files appropriately

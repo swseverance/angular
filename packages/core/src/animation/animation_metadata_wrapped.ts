@@ -53,8 +53,8 @@ export interface AnimationKeyframesSequenceMetadata extends AnimationMetadata {
  * @deprecated This symbol has moved. Please Import from @angular/animations instead!
  */
 export interface AnimationStyleMetadata extends AnimationMetadata {
-  styles: {[key: string]: string | number}|{[key: string]: string | number}[];
-  offset?: number;
+  styles: '*'|{[key: string]: string | number}|Array<{[key: string]: string | number}|'*'>;
+  offset: number|null;
 }
 
 /**
