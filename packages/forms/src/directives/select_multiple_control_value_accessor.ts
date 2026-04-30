@@ -128,13 +128,20 @@ export class SelectMultipleControlValueAccessor
     this.value = value;
     let optionSelectedStateSetter: (opt: ɵNgSelectMultipleOption, o: any) => void;
     if (Array.isArray(value)) {
-      // convert values to ids
-      const ids = value.map((v) => this._getOptionId(v));
-      optionSelectedStateSetter = (opt, o) => {
-        opt._setSelected(ids.indexOf(o.toString()) > -1);
-      };
+      if (this._compareWith === Object.is) {
+        const set = new Set(value);
+        optionSelectedStateSetter = (opt) => {
+          opt._setSelected(set.has(opt._value));
+        };
+      } else {
+        // convert values to ids
+        const ids = value.map((v) => this._getOptionId(v));
+        optionSelectedStateSetter = (opt, o) => {
+          opt._setSelected(ids.indexOf(o.toString()) > -1);
+        };
+      }
     } else {
-      optionSelectedStateSetter = (opt, o) => {
+      optionSelectedStateSetter = (opt) => {
         opt._setSelected(false);
       };
     }
