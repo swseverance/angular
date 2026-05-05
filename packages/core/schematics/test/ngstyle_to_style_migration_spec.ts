@@ -253,6 +253,34 @@ describe('NgStyle migration', () => {
   });
 
   describe('Import array management', () => {
+    it('should not remove NgStyle import when some bindings cannot be migrated', async () => {
+      writeFile(
+        '/app.component.ts',
+        `
+        import {Component} from '@angular/core';
+        import {NgStyle} from '@angular/common';
+        @Component({
+        imports: [NgStyle],
+        template: \`
+          <div [ngStyle]="{'color': 'red'}">Static</div>
+          <div [ngStyle]="dynamicStyles">Dynamic</div>
+        \` })
+        export class Cmp {
+          dynamicStyles = {'background': 'blue'};
+        }
+      `,
+      );
+
+      await runMigration();
+
+      const content = tree.readContent('/app.component.ts');
+
+      expect(content).toContain(`<div [style.color]="'red'">Static</div>`);
+      expect(content).toContain(`<div [ngStyle]="dynamicStyles">Dynamic</div>`);
+      expect(content).toContain('imports: [NgStyle]');
+      expect(content).toContain("import {NgStyle} from '@angular/common';");
+    });
+
     it('should keep imports array when NgStyle is removed but other imports remain', async () => {
       writeFile(
         '/app.component.ts',
@@ -463,6 +491,96 @@ describe('NgStyle migration', () => {
       expect(content).toContain(` <div *ngIf='condition' [style.background]="'red'">`);
       expect(content).toContain('imports: [CommonModule]');
       expect(content).toContain("import {CommonModule} from '@angular/common';");
+    });
+
+    it('should not remove CommonModule import when some bindings cannot be migrated', async () => {
+      writeFile(
+        '/app.component.ts',
+        `
+        import {Component} from '@angular/core';
+        import {CommonModule} from '@angular/common';
+        @Component({
+          imports: [CommonModule],
+          template: \`
+            <div [ngStyle]="{'color': 'red'}">Static</div>
+            <div [ngStyle]="dynamicStyles">Dynamic</div>
+          \`
+        })
+        export class Cmp {
+          dynamicStyles = {'background': 'blue'};
+        }
+      `,
+      );
+
+      await runMigration();
+
+      const content = tree.readContent('/app.component.ts');
+
+      expect(content).toContain(`<div [style.color]="'red'">Static</div>`);
+      expect(content).toContain(`<div [ngStyle]="dynamicStyles">Dynamic</div>`);
+      expect(content).toContain('imports: [CommonModule]');
+      expect(content).toContain("import {CommonModule} from '@angular/common';");
+    });
+
+    it('should remove NgStyle import when all components in a file are fully migrated', async () => {
+      writeFile(
+        '/app.component.ts',
+        `
+        import {Component} from '@angular/core';
+        import {NgStyle} from '@angular/common';
+        @Component({
+          imports: [NgStyle],
+          template: \`<div [ngStyle]="{'color': 'red'}"></div>\`
+        })
+        export class CmpA {}
+
+        @Component({
+          imports: [NgStyle],
+          template: \`<div [ngStyle]="{'background': 'blue'}"></div>\`
+        })
+        export class CmpB {}
+      `,
+      );
+
+      await runMigration();
+
+      const content = tree.readContent('/app.component.ts');
+
+      expect(content).toContain(`<div [style.color]="'red'"></div>`);
+      expect(content).toContain(`<div [style.background]="'blue'"></div>`);
+      expect(content).not.toContain('NgStyle');
+      expect(content).not.toContain("import {NgStyle} from '@angular/common';");
+    });
+
+    it('should keep NgStyle import when one component in a file has unmigrateable bindings', async () => {
+      writeFile(
+        '/app.component.ts',
+        `
+        import {Component} from '@angular/core';
+        import {NgStyle} from '@angular/common';
+        @Component({
+          imports: [NgStyle],
+          template: \`<div [ngStyle]="{'color': 'red'}"></div>\`
+        })
+        export class CmpA {}
+
+        @Component({
+          imports: [NgStyle],
+          template: \`<div [ngStyle]="dynamicStyles"></div>\`
+        })
+        export class CmpB {
+          dynamicStyles = {'background': 'blue'};
+        }
+      `,
+      );
+
+      await runMigration();
+
+      const content = tree.readContent('/app.component.ts');
+
+      expect(content).toContain(`<div [style.color]="'red'"></div>`);
+      expect(content).toContain(`<div [ngStyle]="dynamicStyles"></div>`);
+      expect(content).toContain("import {NgStyle} from '@angular/common';");
     });
   });
 });

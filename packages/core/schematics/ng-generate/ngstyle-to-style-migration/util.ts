@@ -20,7 +20,7 @@ import ts from 'typescript';
 import {applyImportManagerChanges} from '../../utils/tsurge/helpers/apply_import_manager';
 import {MigrationConfig} from './types';
 import {getImportSpecifiers} from '../../utils/typescript/imports';
-import {canRemoveCommonModule, parseTemplate} from '../../utils/parse_html';
+import {parseTemplate, canRemoveCommonModule} from '../../utils/parse_html';
 
 const ngStyleStr = 'NgStyle';
 const commonModuleStr = '@angular/common';
@@ -36,10 +36,19 @@ export function migrateNgStyleBindings(
   migrated: string;
   changed: boolean;
   canRemoveCommonModule: boolean;
+  canRemoveNgStyle: boolean;
+  hasUnmigratedNgStyle: boolean;
 } {
   const parsed = parseTemplate(template);
   if (!parsed.tree || !parsed.tree.rootNodes.length) {
-    return {migrated: template, changed: false, replacementCount: 0, canRemoveCommonModule: false};
+    return {
+      migrated: template,
+      changed: false,
+      replacementCount: 0,
+      canRemoveCommonModule: false,
+      canRemoveNgStyle: false,
+      hasUnmigratedNgStyle: false,
+    };
   }
 
   const visitor = new NgStyleCollector(template, componentNode, typeChecker);
@@ -62,7 +71,14 @@ export function migrateNgStyleBindings(
     migrated: newTemplate,
     changed,
     replacementCount,
-    canRemoveCommonModule: changed ? canRemoveCommonModule(newTemplate) : false,
+    canRemoveCommonModule:
+      changed && visitor.isCommonModuleImported && canRemoveCommonModule(newTemplate),
+    canRemoveNgStyle:
+      changed && visitor.isNgStyleImported && visitor.ngStyleCount === visitor.replacements.length,
+    hasUnmigratedNgStyle:
+      !changed &&
+      visitor.ngStyleCount > 0 &&
+      (visitor.isNgStyleImported || visitor.isCommonModuleImported),
   };
 }
 
@@ -75,6 +91,7 @@ export function createNgStyleImportsArrayRemoval(
   file: ProjectFile,
   typeChecker: ts.TypeChecker,
   removeCommonModule: boolean,
+  removeNgStyle: boolean,
 ): Replacement | null {
   const reflector = new TypeScriptReflectionHost(typeChecker);
   const decorators = reflector.getDecoratorsOfDeclaration(classNode);
@@ -108,7 +125,10 @@ export function createNgStyleImportsArrayRemoval(
   }
 
   const importsArray = importsProperty.initializer;
-  const elementsToRemove = new Set<string>([ngStyleStr]);
+  const elementsToRemove = new Set<string>();
+  if (removeNgStyle) {
+    elementsToRemove.add(ngStyleStr);
+  }
   if (removeCommonModule) {
     elementsToRemove.add(commonModuleImportsStr);
   }
@@ -187,6 +207,7 @@ export function calculateImportReplacements(
   info: ProgramInfo,
   sourceFiles: Set<ts.SourceFile>,
   filesToRemoveCommonModule: Set<ProjectFileID>,
+  filesToRemoveNgStyle: Set<ProjectFileID>,
 ) {
   const importReplacements: Record<
     ProjectFileID,
@@ -197,8 +218,10 @@ export function calculateImportReplacements(
   for (const sf of sourceFiles) {
     const file = projectFile(sf, info);
 
-    // Always remove NgStyle if it's imported directly.
-    importManager.removeImport(sf, ngStyleStr, commonModuleStr);
+    // Conditionally remove NgStyle if all bindings were migrated.
+    if (filesToRemoveNgStyle.has(file.id)) {
+      importManager.removeImport(sf, ngStyleStr, commonModuleStr);
+    }
 
     // Conditionally remove CommonModule if it's no longer needed.
     if (filesToRemoveCommonModule.has(file.id)) {
@@ -235,7 +258,9 @@ function replaceTemplate(
  */
 class NgStyleCollector extends RecursiveVisitor {
   readonly replacements: {start: number; end: number; replacement: string}[] = [];
-  private isNgStyleImported: boolean = true; // Default to true (permissive)
+  isNgStyleImported: boolean = true; // Default to true (permissive)
+  isCommonModuleImported: boolean = true;
+  ngStyleCount = 0;
 
   constructor(
     private originalTemplate: string,
@@ -244,23 +269,23 @@ class NgStyleCollector extends RecursiveVisitor {
   ) {
     super();
 
-    // If we have enough information, check if NgStyle is actually imported.
+    // If we have enough information, check if NgStyle or CommonModule is actually imported.
     // If not, we can confidently disable the migration for this component.
     if (componentNode && typeChecker) {
-      const imports = getImportSpecifiers(componentNode.getSourceFile(), commonModuleStr, [
-        ngStyleStr,
-        commonModuleImportsStr,
-      ]);
+      this.isNgStyleImported =
+        getImportSpecifiers(componentNode.getSourceFile(), commonModuleStr, [ngStyleStr]).length >
+        0;
 
-      if (imports.length === 0) {
-        this.isNgStyleImported = false;
-      }
+      this.isCommonModuleImported =
+        getImportSpecifiers(componentNode.getSourceFile(), commonModuleStr, [
+          commonModuleImportsStr,
+        ]).length > 0;
     }
   }
 
   override visitElement(element: Element, config: MigrationConfig) {
     // If NgStyle is not imported, do not attempt to migrate.
-    if (!this.isNgStyleImported) {
+    if (!this.isNgStyleImported && !this.isCommonModuleImported) {
       return;
     }
 
@@ -269,6 +294,7 @@ class NgStyleCollector extends RecursiveVisitor {
         continue;
       }
       if (attr.name === '[ngStyle]' && attr.valueSpan) {
+        ++this.ngStyleCount;
         const expr = this.originalTemplate.slice(
           attr.valueSpan.start.offset,
           attr.valueSpan.end.offset,
@@ -317,6 +343,7 @@ class NgStyleCollector extends RecursiveVisitor {
       }
 
       if (attr.name === 'ngStyle' && attr.value) {
+        ++this.ngStyleCount;
         this.replacements.push({
           start: attr.sourceSpan.start.offset,
           end: attr.sourceSpan.end.offset,

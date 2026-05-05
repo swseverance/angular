@@ -56,15 +56,26 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
     replacements: Replacement[];
     replacementCount: number;
     canRemoveCommonModule: boolean;
+    canRemoveNgStyle: boolean;
   } | null {
-    const {migrated, changed, replacementCount, canRemoveCommonModule} = migrateNgStyleBindings(
-      template.content,
-      this.config,
-      node,
-      typeChecker,
-    );
+    const {
+      migrated,
+      changed,
+      replacementCount,
+      canRemoveCommonModule,
+      canRemoveNgStyle,
+      hasUnmigratedNgStyle,
+    } = migrateNgStyleBindings(template.content, this.config, node, typeChecker);
 
     if (!changed) {
+      if (hasUnmigratedNgStyle) {
+        return {
+          replacements: [],
+          replacementCount: 0,
+          canRemoveCommonModule: false,
+          canRemoveNgStyle: false,
+        };
+      }
       return null;
     }
 
@@ -77,6 +88,7 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
       replacements: [prepareTextReplacement(fileToMigrate, migrated, template.start, end)],
       replacementCount,
       canRemoveCommonModule,
+      canRemoveNgStyle,
     };
   }
 
@@ -86,6 +98,9 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
     const ngStyleReplacements: Array<NgStyleMigrationData> = [];
     const filesWithNgStyleDeclarations = new Set<ts.SourceFile>();
     const filesToRemoveCommonModule = new Set<ProjectFileID>();
+    const filesToNotRemoveCommonModule = new Set<ProjectFileID>();
+    const filesToRemoveNgStyle = new Set<ProjectFileID>();
+    const filesToNotRemoveNgStyle = new Set<ProjectFileID>();
 
     for (const sf of sourceFiles) {
       ts.forEachChild(sf, (node: ts.Node) => {
@@ -105,6 +120,7 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
         const replacementsForStyle: Replacement[] = [];
         let replacementCountForStyle = 0;
         let canRemoveCommonModuleForFile = true;
+        let canRemoveNgStyleForFile = true;
 
         for (const template of templateVisitor.resolvedTemplates) {
           const result = this.processTemplate(template, node, file, info, typeChecker);
@@ -114,12 +130,27 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
             if (!result.canRemoveCommonModule) {
               canRemoveCommonModuleForFile = false;
             }
+            if (!result.canRemoveNgStyle) {
+              canRemoveNgStyleForFile = false;
+            }
           }
         }
 
+        if (!canRemoveNgStyleForFile) {
+          filesToRemoveNgStyle.delete(file.id);
+          filesToNotRemoveNgStyle.add(file.id);
+        }
+
         if (replacementsForStyle.length > 0) {
-          if (canRemoveCommonModuleForFile) {
+          if (canRemoveCommonModuleForFile && !filesToNotRemoveCommonModule.has(file.id)) {
             filesToRemoveCommonModule.add(file.id);
+          } else if (!canRemoveCommonModuleForFile) {
+            filesToRemoveCommonModule.delete(file.id);
+            filesToNotRemoveCommonModule.add(file.id);
+          }
+
+          if (canRemoveNgStyleForFile && !filesToNotRemoveNgStyle.has(file.id)) {
+            filesToRemoveNgStyle.add(file.id);
           }
 
           // Handle the `@Component({ imports: [...] })` array.
@@ -128,6 +159,7 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
             file,
             typeChecker,
             canRemoveCommonModuleForFile,
+            canRemoveNgStyleForFile,
           );
           if (importsRemoval) {
             replacementsForStyle.push(importsRemoval);
@@ -147,6 +179,7 @@ export class NgStyleMigration extends TsurgeFunnelMigration<
       info,
       filesWithNgStyleDeclarations,
       filesToRemoveCommonModule,
+      filesToRemoveNgStyle,
     );
 
     return confirmAsSerializable({
